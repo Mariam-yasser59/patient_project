@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -33,7 +32,6 @@ class _PatientManagementScreenState extends State<PatientManagementScreen> {
     setState(() => patientsList = data);
   }
 
-  // --- دالة التصدير ---
   _exportData() async {
     try {
       List<Patient> allPatients = await DatabaseHelper.instance.queryAll();
@@ -60,8 +58,6 @@ class _PatientManagementScreenState extends State<PatientManagementScreen> {
       }
       var fileBytes = excel.save();
       final directory = await getTemporaryDirectory();
-      String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final filePath = '${directory.path}/patients_report_$timestamp.xlsx';
       final file = File(filePath);
       await file.writeAsBytes(fileBytes!);
       await Share.shareXFiles([XFile(file.path)], text: 'تقرير المرضى');
@@ -70,14 +66,12 @@ class _PatientManagementScreenState extends State<PatientManagementScreen> {
     }
   }
 
-  // --- دالة الاستيراد ---
   _importData() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
-      if (result == null) return;
       var bytes = File(result.files.single.path!).readAsBytesSync();
       var excel = excel_lib.Excel.decodeBytes(bytes);
       for (var table in excel.tables.keys) {
@@ -109,8 +103,6 @@ class _PatientManagementScreenState extends State<PatientManagementScreen> {
   }
 
   _addPatient() async {
-    if (nameController.text.isEmpty || selectedDate == null || phoneController.text.length < 11) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("أكمل البيانات (الهاتف 11 رقم)")));
       return;
     }
     int count = await DatabaseHelper.instance.getPatientsCount();
@@ -136,134 +128,45 @@ class _PatientManagementScreenState extends State<PatientManagementScreen> {
         backgroundColor: const Color(0xFF2185D0),
         centerTitle: true,
       ),
-      // الجسم يحتوي على الإدخال والقائمة فقط
-      body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: _buildInputCard(),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: _buildSearchField(),
-          ),
           const SizedBox(height: 10),
-          Expanded(
-            child: _buildListView(),
-          ),
         ],
       ),
-      // السر هنا: وضع الأزرار في bottomNavigationBar يجعلها تظهر بوضوح فوق شريط النظام
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
           child: Row(
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _exportData,
-                  icon: const Icon(Icons.table_view),
-                  label: const Text("تصدير"),
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
-                ),
-              ),
               const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _importData,
-                  icon: const Icon(Icons.download),
-                  label: const Text("استيراد"),
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
-                ),
-              ),
             ],
-          ),
-        ),
       ),
     );
   }
 
   Widget _buildInputCard() {
     return Container(
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.blue.shade100)),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         children: [
           _inputField("الاسم", nameController, Icons.person),
           _inputField("الهاتف", phoneController, Icons.phone),
           ListTile(
-            dense: true,
             onTap: () => _selectDate(context),
             title: Text(selectedDate == null ? "تاريخ الميلاد" : DateFormat('yyyy-MM-dd').format(selectedDate!)),
-            trailing: const Icon(Icons.calendar_today, color: Color(0xFF2185D0)),
           ),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(onPressed: _addPatient, child: const Text("إضافة")),
-          )
         ],
       ),
     );
   }
 
   Widget _inputField(String label, TextEditingController controller, IconData icon) {
-    bool isPhone = label == "الهاتف";
-    return TextField(
-      controller: controller,
-      keyboardType: isPhone ? TextInputType.number : TextInputType.text,
-      inputFormatters: isPhone ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)] : [],
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), contentPadding: const EdgeInsets.symmetric(vertical: 8)),
-    );
   }
 
   Widget _buildSearchField() {
     return TextField(
-      onChanged: (val) async {
-        final data = await DatabaseHelper.instance.search(val);
-        setState(() => patientsList = data);
-      },
-      decoration: InputDecoration(
-        hintText: "بحث...",
-        prefixIcon: const Icon(Icons.search),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-      ),
     );
   }
 
   Widget _buildListView() {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: patientsList.length,
-      itemBuilder: (ctx, i) {
-        final p = patientsList[i];
-        return Card(
-          elevation: 1,
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: ListTile(
-            title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("#${p.fileNumber}", style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                Row(
-                  children: [
-                    const Icon(Icons.phone, size: 12, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(p.phone, style: const TextStyle(fontSize: 11)),
-                    const SizedBox(width: 12),
-                    const Icon(Icons.cake, size: 12, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(p.birthDate, style: const TextStyle(fontSize: 11)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
